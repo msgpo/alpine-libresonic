@@ -1,0 +1,52 @@
+ARG ARCH=frommakefile
+ARG DOCKERSRC=frommakefile
+ARG USERNAME=frommakefile
+#
+FROM ${USERNAME}/${DOCKERSRC}:${ARCH}
+#
+ARG JETTY_VERSION="9.4.9.v20180320"
+#
+ENV LIBRE_HOME="/opt/libresonic" \
+    LIBRE_SETTINGS="/config"
+#
+# install build packages
+RUN set -xe \
+    && apk add -U --no-cache \
+        ffmpeg  \
+        lame  \
+        flac  \
+        ttf-dejavu \
+        # openjdk8-jre \
+    && apk add --no-cache --virtual=build-dependencies openjdk8 \
+# install jetty-runner
+    && mkdir -p /tmp/jetty \
+    && echo '#!/bin/sh' > /tmp/jetty/jetty-runner \
+    && echo 'java="\${JAVA_HOME:+\$JAVA_HOME/bin/}java"' >> /tmp/jetty/jetty-runner \
+    && echo '\$java \$JAVA_OPTS -cp /usr/share/java/jetty-runner.jar org.eclipse.jetty.runner.Runner \$@' >> /tmp/jetty/jetty-runner \
+    && curl -o \
+        /tmp/jetty/"jetty-runner-${JETTY_VERSION}".jar -L \
+        "https://repo.maven.apache.org/maven2/org/eclipse/jetty/jetty-runner/${JETTY_VERSION}/jetty-runner-${JETTY_VERSION}.jar" \
+    && cd /tmp/jetty \
+    && install -m644 -D "jetty-runner-${JETTY_VERSION}.jar" \
+        /usr/share/java/jetty-runner.jar \
+    && install -m755 -D jetty-runner /usr/bin/jetty-runner \
+# install app
+    && mkdir -p \
+        ${LIBRE_HOME} \
+    && LIBRESONIC_VERSION="$(curl -SL https://api.github.com/repos/Libresonic/libresonic/releases/latest | awk '/tag_name/{print $4;exit}' FS='[""]' | sed -e 's_v__')" \
+    && echo "Using version: ${LIBRESONIC_VERSION}" \
+    && curl -o \
+        ${LIBRE_HOME}/libresonic.war -jkSL \
+        "https://github.com/Libresonic/libresonic/releases/download/v$LIBRESONIC_VERSION/libresonic-v${LIBRESONIC_VERSION}.war" \
+# cleanup
+    && apk del --purge build-dependencies \
+    && chown -Rh alpine:alpine ${LIBRE_HOME} \
+    && rm -rf /tmp/* /var/cache/apk/*
+#
+COPY root/ /
+#
+VOLUME /music/ /media/ /playlists/ /podcasts/ /config/
+#
+EXPOSE 4040
+#
+ENTRYPOINT ["/init"]

@@ -1,0 +1,23 @@
+#!/usr/bin/with-contenv bash
+
+# strip leading slash if present in set variable
+[[ "$CONTEXT_PATH" ]] && CONTEXT_PATH="${CONTEXT_PATH#/}"
+
+# set url base to / if variable not set, readding leading slash if variable is set.
+URL_BASE="/${CONTEXT_PATH:-libresonic}"
+
+# default value for annotation timeout in seconds.
+MAX_WAIT=${MAX_WAIT:-1800}
+
+cd "${LIBRE_HOME}" || exit
+
+s6-setuidgid alpine \
+	java -Dorg.eclipse.jetty.annotations.maxWait="${MAX_WAIT}" \
+	-Dlibresonic.home="${LIBRE_SETTINGS}" \
+	-Dlibresonic.defaultMusicFolder=/music \
+	-Dlibresonic.defaultPodcastFolder=/podcasts \
+	-Dlibresonic.defaultPlaylistFolder=/playlists \
+	-jar /usr/share/java/jetty-runner.jar \
+	--host 0.0.0.0 --port 4040 --path "${URL_BASE}" \
+	libresonic.war
+
